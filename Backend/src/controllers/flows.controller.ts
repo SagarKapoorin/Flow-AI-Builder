@@ -88,16 +88,3 @@ export async function deleteFlowHandler(req: Request, res: Response, next: NextF
     return next(err)
   }
 }
-
-//this funciton handle validate flow graph api
-export async function validateFlowForIdHandler(
-  req: Request,
-  res: Response,
-  _next: NextFunction
-) {
-  const { nodes, edges } = req.body || {}
-  const graph: FlowGraph = { nodes: nodes || [], edges: edges || [] }
-  const result = validateFlowGraph(graph)
-  return res.json({ valid: result.valid, errors: result.errors })
-}
-
