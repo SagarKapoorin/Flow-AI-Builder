@@ -26,122 +26,33 @@ import type { ButtonNodeData, NodeType } from '../types/flow.types'
 
 let idCounter = 1
 const nextId = () => `node_${idCounter++}`
-//added loader to restore saved flow from localstorage
-function loadInitialFlow(): Flow {
-  try {
-    const raw = localStorage.getItem('bitspeed.flow')
-    if (!raw) return defaultFlow()
-    const parsed = JSON.parse(raw)
-    const nodes: AppRFNode[] = []
-    const edges: RFEdge[] = []
-    if (parsed && parsed.nodes && Array.isArray(parsed.nodes)) {
-      for (const n of parsed.nodes) {
-        if (!n || typeof n.id !== 'string' || typeof n.type !== 'string' || !n.position) continue
-        const pos = n.position
-        if (typeof pos.x !== 'number' || typeof pos.y !== 'number') continue
-        if (n.type === 'text' && n.data && typeof n.data.text === 'string') {
-          nodes.push({
-            id: n.id,
-            type: 'text',
-            position: { x: pos.x, y: pos.y },
-            data: { text: n.data.text },
-          })
-        } else if (n.type === 'image' && n.data && typeof n.data.imageUrl === 'string') {
-          nodes.push({
-            id: n.id,
-            type: 'image',
-            position: { x: pos.x, y: pos.y },
-            data: {
-              imageUrl: n.data.imageUrl,
-              caption: typeof n.data.caption === 'string' ? n.data.caption : undefined,
-            },
-          })
-        } else if (
-          n.type === 'button' &&
-          n.data &&
-          Array.isArray(n.data.buttons) &&
-          typeof n.data.text === 'string'
-        ) {
-          const btns = [] as { label: string; value: string }[]
-          for (const b of n.data.buttons) {
-            if (b && typeof b.label === 'string' && typeof b.value === 'string')
-              btns.push({ label: b.label, value: b.value })
-          }
-          nodes.push({
-            id: n.id,
-            type: 'button',
-            position: { x: pos.x, y: pos.y },
-            data: { text: n.data.text, buttons: btns },
-          })
-        } else if (
-          n.type === 'conditional' &&
-          n.data &&
-          typeof n.data.variable === 'string' &&
-          typeof n.data.condition === 'string'
-        ) {
-          nodes.push({
-            id: n.id,
-            type: 'conditional',
-            position: { x: pos.x, y: pos.y },
-            data: { variable: n.data.variable, condition: n.data.condition },
-          })
-        }
-      }
-    }
-    if (parsed && parsed.edges && Array.isArray(parsed.edges)) {
-      for (const e of parsed.edges) {
-        if (
-          !e ||
-          typeof e.id !== 'string' ||
-          typeof e.source !== 'string' ||
-          typeof e.target !== 'string'
-        )
-          continue
-        const edge: RFEdge = {
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          type: typeof e.type === 'string' ? e.type : 'default',
-          sourceHandle: typeof e.sourceHandle === 'string' ? e.sourceHandle : undefined,
-          targetHandle: typeof e.targetHandle === 'string' ? e.targetHandle : undefined,
-        }
-        edges.push(edge)
-      }
-    }
-    // update counter from existing node ids
-    let max = 0
-    for (const n of nodes) {
-      const m = /node_(\d+)$/.exec(n.id)
-      if (m) {
-        const num = Number(m[1])
-        if (!Number.isNaN(num) && num > max) max = num
-      }
-    }
-    idCounter = Math.max(1, max + 1)
-    if (nodes.length === 0) return defaultFlow()
-    return { nodes, edges }
-  } catch {
-    return defaultFlow()
-  }
-}
 //added default flow when no saved data exists
 function defaultFlow(): Flow {
+  const firstId = nextId()
+  const secondId = nextId()
   return {
     nodes: [
       {
-        id: nextId(),
+        id: firstId,
         type: 'text',
         position: { x: 100, y: 100 },
         data: { text: 'test message 1' },
       },
       {
-        id: nextId(),
+        id: secondId,
         type: 'text',
         position: { x: 400, y: 100 },
         data: { text: 'test message 2' },
       },
     ],
-    edges: [{ id: 'e1-2', source: 'node_1', target: 'node_2', type: 'default' }],
+    edges: [
+      {
+        id: `e-${firstId}-${secondId}`,
+        source: firstId,
+        target: secondId,
+        type: 'default',
+      },
+    ],
   }
 }
 
@@ -154,13 +65,27 @@ const nodeTypes: NodeTypes = {
 //added registry pattern to easily register new nodes
 
 export default function FlowBuilder() {
-const initial = useMemo(() => loadInitialFlow(), []);
+  const apiBase = (import.meta).env?.VITE_API_BASE_URL || 'http://localhost:4000'
+  const initial = useMemo(() => defaultFlow(), [])
   const [nodes, setNodes, onNodesChange] = useNodesState<AppRFNode>(initial.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState<RFEdge>(initial.edges)
   const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>()
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const rf = useRef<ReactFlowInstance<AppRFNode, RFEdge> | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [flowName, setFlowName] = useState<string>('Main Chatbot Flow')
+  const [flowDescription, setFlowDescription] = useState<string>('')
+  const [flowId, setFlowId] = useState<string | undefined>(undefined)
+  const [metaDialogOpen, setMetaDialogOpen] = useState(false)
+  const [flowsDialogOpen, setFlowsDialogOpen] = useState(false)
+  const [flowsLoading, setFlowsLoading] = useState(false)
+  const [flows, setFlows] = useState<Array<{ id: string; name: string; description?: string }>>([])
+  const [aiDialogOpen, setAiDialogOpen] = useState(false)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiRecommendations, setAiRecommendations] = useState<string[]>([])
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false)
+  const [generateLoading, setGenerateLoading] = useState(false)
+  const [generateBrief, setGenerateBrief] = useState('')
   //Closex sidebar when nodes panel starts a drag on small screens
   //(NodesPanel dispatches a custom event during dragstart)
   useEffect(() => {
@@ -169,6 +94,15 @@ const initial = useMemo(() => loadInitialFlow(), []);
     }
     window.addEventListener('fb-close-sidebar', handler as EventListener)
     return () => window.removeEventListener('fb-close-sidebar', handler as EventListener)
+  }, [])
+  useEffect(() => {
+    const openHandler = () => {
+      setGenerateBrief('')
+      setGenerateDialogOpen(true)
+    }
+    window.addEventListener('fb-open-generate-from-brief', openHandler as EventListener)
+    return () =>
+      window.removeEventListener('fb-open-generate-from-brief', openHandler as EventListener)
   }, [])
   //Mobile: click-to-add from NodesPanel
   useEffect(() => {
@@ -359,10 +293,206 @@ const initial = useMemo(() => loadInitialFlow(), []);
   const notify = useCallback((message: string, type: 'success' | 'error') => {
     setToast({ type, message })
     if (toastTimerRef.current) {
+      // console.log("Clearing existing toast timer");
       window.clearTimeout(toastTimerRef.current)
     }
     toastTimerRef.current = window.setTimeout(() => setToast(null), 3000) as unknown as number
   }, [])
+
+  const handleNewFlow = useCallback(() => {
+    const fresh = defaultFlow()
+    setNodes(fresh.nodes)
+    setEdges(fresh.edges)
+    setSelectedNodeId(undefined)
+    setFlowName('Main Chatbot Flow')
+    setFlowDescription('')
+    setFlowId(undefined)
+    notify('Started new flow', 'success')
+  }, [setNodes, setEdges, notify])
+
+  const handleDeleteCurrentFlow = useCallback(async () => {
+    if (!flowId) {
+      handleNewFlow()
+      return
+    }
+    try {
+      await fetch(`${apiBase}/api/flows/${encodeURIComponent(flowId)}`, {
+        method: 'DELETE',
+      })
+    } catch {
+      // ignore network errors, still reset locally
+    }
+    handleNewFlow()
+    setFlowId(undefined)
+    notify('Flow deleted', 'success')
+  }, [apiBase, flowId, handleNewFlow, notify])
+
+  const openFlowsDialog = useCallback(async () => {
+    setFlowsDialogOpen(true)
+    setFlowsLoading(true)
+    try {
+      const res = await fetch(`${apiBase}/api/flows?page=1&pageSize=50`)
+      if (!res.ok) return
+      const body = await res.json()
+      if (body && Array.isArray(body.items)) {
+        interface BackendFlowItem {
+          id?: string;
+          _id?: string;
+          name?: string;
+          description?: string;
+        }
+        interface FlowListItem {
+          id: string;
+          name: string;
+          description?: string;
+        }
+        setFlows(
+          (body.items as BackendFlowItem[]).map(
+            (f: BackendFlowItem): FlowListItem => ({
+              id: String(f.id || f._id),
+              name: typeof f.name === 'string' ? f.name : 'Untitled flow',
+              description: typeof f.description === 'string' ? f.description : undefined,
+            })
+          )
+        )
+      } else {
+        setFlows([])
+      }
+    } catch {
+      notify('Failed to load flows', 'error')
+    } finally {
+      setFlowsLoading(false)
+    }
+  }, [apiBase, notify])
+
+  const handleOpenFlowFromList = useCallback(
+    async (id: string) => {
+      try {
+        const res = await fetch(`${apiBase}/api/flows/${encodeURIComponent(id)}`)
+        if (!res.ok) {
+          notify('Failed to load flow', 'error')
+          return
+        }
+        const data = await res.json()
+        if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) return
+        setNodes(data.nodes)
+        setEdges(data.edges)
+        if (typeof data.name === 'string') setFlowName(data.name)
+        if (typeof data.description === 'string') setFlowDescription(data.description)
+        let max = 0
+        for (const n of data.nodes as AppRFNode[]) {
+          const m = /node_(\d+)$/.exec(n.id)
+          if (m) {
+            const num = Number(m[1])
+            if (!Number.isNaN(num) && num > max) max = num
+          }
+        }
+        idCounter = Math.max(1, max + 1)
+        setFlowId(typeof data.id === 'string' ? data.id : id)
+        setSelectedNodeId(undefined)
+        setFlowsDialogOpen(false)
+        notify('Flow loaded', 'success')
+      } catch {
+        notify('Failed to load flow', 'error')
+      }
+    },
+    [apiBase, notify, setNodes, setEdges]
+  )
+
+  const handleDeleteFlowFromList = useCallback(
+    async (id: string) => {
+      try {
+        await fetch(`${apiBase}/api/flows/${encodeURIComponent(id)}`, { method: 'DELETE' })
+        setFlows((prev) => prev.filter((f) => f.id !== id))
+        if (flowId === id) {
+          handleNewFlow()
+        }
+        notify('Flow deleted', 'success')
+      } catch {
+        notify('Failed to delete flow', 'error')
+      }
+    },
+    [apiBase, flowId, handleNewFlow, notify]
+  )
+
+  const handleAiRecommendations = useCallback(async () => {
+    setAiLoading(true)
+    try {
+      const res = await fetch(`${apiBase}/api/ai/flow-recommendations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentFlow: {
+            nodes,
+            edges,
+            goal: flowDescription || flowName,
+          },
+        }),
+      })
+      if (!res.ok) {
+        notify('Failed to get AI recommendations', 'error')
+        return
+      }
+      const body = await res.json()
+      if (body && Array.isArray(body.recommendations)) {
+        setAiRecommendations(body.recommendations)
+      } else {
+        setAiRecommendations([])
+      }
+      setAiDialogOpen(true)
+    } catch {
+      notify('Failed to get AI recommendations', 'error')
+    } finally {
+      setAiLoading(false)
+    }
+  }, [apiBase, nodes, edges, flowDescription, flowName, notify])
+
+  const handleGenerateFlowFromBrief = useCallback(async () => {
+    if (!generateBrief.trim()) {
+      notify('Please enter a brief for AI', 'error')
+      return
+    }
+    setGenerateLoading(true)
+    try {
+      const res = await fetch(`${apiBase}/api/ai/generate-flow-from-brief`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brief: generateBrief.trim(),
+        }),
+      })
+      if (!res.ok) {
+        notify('Failed to generate flow from brief', 'error')
+        return
+      }
+      const data = await res.json()
+      if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
+        notify('AI did not return a valid flow', 'error')
+        return
+      }
+      setNodes(data.nodes)
+      setEdges(data.edges)
+      let max = 0
+      for (const n of data.nodes as AppRFNode[]) {
+        const m = /node_(\d+)$/.exec(n.id)
+        if (m) {
+          const num = Number(m[1])
+          if (!Number.isNaN(num) && num > max) max = num
+        }
+      }
+      idCounter = Math.max(1, max + 1)
+      setSelectedNodeId(undefined)
+      setFlowId(undefined)
+      setGenerateDialogOpen(false)
+      notify('Flow generated from brief', 'success')
+    } catch {
+      notify('Failed to generate flow from brief', 'error')
+    } finally {
+      setGenerateLoading(false)
+    }
+  }, [apiBase, generateBrief, notify, setNodes, setEdges])
+
+  // initial flow is always in-memory; backend flows are opened via the "All flows" dialog
   return (
     <div className="fb-container">
       <div className="fb-header">
@@ -373,13 +503,45 @@ const initial = useMemo(() => loadInitialFlow(), []);
         >
           ☰
         </button>
+        <div style={{ display: 'flex', gap: '8px', marginLeft: '16px' }}>
+          <button type="button" className="btn" onClick={handleNewFlow}>
+            New flow
+          </button>
+          <button type="button" className="btn" onClick={openFlowsDialog}>
+            All flows
+          </button>
+          <button type="button" className="btn" onClick={handleDeleteCurrentFlow}>
+            Delete flow
+          </button>
+        </div>
         <div style={{ flex: 1 }} />
         <div className="save-area">
           <SaveButton
             flow={flow}
+            name={flowName}
+            description={flowDescription}
+            flowId={flowId}
+            onFlowIdChange={setFlowId}
             onSave={() => notify('Changes saved', 'success')}
             onError={(errs) => notify(errs?.[0] || 'Unable to save changes', 'error')}
           />
+          <button
+            type="button"
+            className="btn"
+            style={{ marginLeft: '8px' }}
+            onClick={handleAiRecommendations}
+            disabled={aiLoading}
+          >
+            {aiLoading ? 'Getting AI tips…' : 'AI flow tips'}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            style={{ marginLeft: '8px' }}
+            onClick={() => setMetaDialogOpen(true)}
+          >
+            Edit details
+          </button>
         </div>
       </div>
       {toast && (
@@ -430,6 +592,267 @@ const initial = useMemo(() => loadInitialFlow(), []);
         className={`fb-overlay ${sidebarOpen ? 'show' : ''}`}
         onClick={() => setSidebarOpen(false)}
       />
+      {metaDialogOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 20,
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              padding: '16px',
+              borderRadius: '8px',
+              maxWidth: '420px',
+              width: '90%',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+            }}
+          >
+            <h2 style={{ margin: '0 0 12px 0' }}>Flow details</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <div className="form-label">Name</div>
+                <input
+                  className="input"
+                  value={flowName}
+                  onChange={(e) => setFlowName(e.target.value)}
+                  placeholder="My chatbot flow"
+                />
+              </div>
+              <div>
+                <div className="form-label">Description</div>
+                <textarea
+                  className="textarea"
+                  rows={3}
+                  value={flowDescription}
+                  onChange={(e) => setFlowDescription(e.target.value)}
+                  placeholder="Optional description for this flow"
+                />
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: '8px',
+                  marginTop: '4px',
+                }}
+              >
+                <button type="button" className="btn" onClick={() => setMetaDialogOpen(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setMetaDialogOpen(false)}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {aiDialogOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 20,
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              padding: '16px',
+              borderRadius: '8px',
+              maxWidth: '520px',
+              width: '90%',
+              maxHeight: '70vh',
+              overflowY: 'auto',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+            }}
+          >
+            <h2 style={{ margin: '0 0 12px 0' }}>AI flow recommendations</h2>
+            {aiRecommendations.length === 0 ? (
+              <div className="muted">No recommendations returned for this flow.</div>
+            ) : (
+              <ul style={{ paddingLeft: '20px', margin: '0 0 16px 0' }}>
+                {aiRecommendations.map((rec, idx) => (
+                  <li key={idx} style={{ marginBottom: '6px' }}>
+                    {rec}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+              <button type="button" className="btn" onClick={() => setAiDialogOpen(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {generateDialogOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 20,
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              padding: '16px',
+              borderRadius: '8px',
+              maxWidth: '520px',
+              width: '90%',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+            }}
+          >
+            <h2 style={{ margin: '0 0 12px 0' }}>AI generate flow from brief</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <div className="form-label">Brief</div>
+                <textarea
+                  className="textarea"
+                  rows={4}
+                  value={generateBrief}
+                  onChange={(e) => setGenerateBrief(e.target.value)}
+                  placeholder="Describe the chatbot flow you want (purpose, audience, tone, etc.)"
+                />
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: '8px',
+                  marginTop: '4px',
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setGenerateDialogOpen(false)}
+                  disabled={generateLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleGenerateFlowFromBrief}
+                  disabled={generateLoading}
+                >
+                  {generateLoading ? 'Generating' : 'Generate flow'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {flowsDialogOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 20,
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              padding: '16px',
+              borderRadius: '8px',
+              maxWidth: '520px',
+              width: '90%',
+              maxHeight: '70vh',
+              overflowY: 'auto',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+            }}
+          >
+            <h2 style={{ margin: '0 0 12px 0' }}>Saved flows</h2>
+            {flowsLoading ? (
+              <div className="muted">Loading flows…</div>
+            ) : flows.length === 0 ? (
+              <div className="muted">No flows found in backend.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {flows.map((f) => (
+                  <div
+                    key={f.id}
+                    style={{
+                      border: '1px solid #e0e0e0',
+                      borderRadius: '6px',
+                      padding: '8px 10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '14px' }}>{f.name}</div>
+                      {f.description && (
+                        <div
+                          style={{
+                            fontSize: '12px',
+                            color: '#666',
+                            whiteSpace: 'nowrap',
+                            textOverflow: 'ellipsis',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {f.description}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => handleOpenFlowFromList(f.id)}
+                      >
+                        Open
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => handleDeleteFlowFromList(f.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
+              <button type="button" className="btn" onClick={() => setFlowsDialogOpen(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

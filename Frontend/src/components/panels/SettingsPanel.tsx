@@ -1,4 +1,4 @@
-import type { ChangeEvent } from 'react'
+import { useState, type ChangeEvent } from 'react'
 import type {
   AppRFNode,
   ButtonNodeData,
@@ -6,15 +6,14 @@ import type {
   ImageNodeData,
   TextNodeData,
 } from '../../types/flow.types'
-
 type Props = {
   node?: AppRFNode
   onChange: (updater: (node: AppRFNode) => AppRFNode) => void
   onBack: () => void
 }
-
 export default function SettingsPanel({ node, onChange, onBack }: Props) {
   const type = node?.type
+  // console.log( type);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div className="settings-header">
@@ -30,13 +29,13 @@ export default function SettingsPanel({ node, onChange, onBack }: Props) {
             onChange={(d) => onChange((n) => (n.type === 'text' ? { ...n, data: d } : n))}
           />
         )}
-        {type === 'image' && node && (
+    {type === 'image' && node && (
           <ImageSettings
             data={node.data}
             onChange={(d) => onChange((n) => (n.type === 'image' ? { ...n, data: d } : n))}
           />
         )}
-        {type === 'button' && node && (
+      {type === 'button' && node && (
           <ButtonSettings
             data={node.data}
             onChange={(d) => onChange((n) => (n.type === 'button' ? { ...n, data: d } : n))}
@@ -75,11 +74,34 @@ function TextSettings({
   data?: TextNodeData
   onChange: (d: TextNodeData) => void
 }) {
+  const [isWriting, setIsWriting] = useState(false)
+  const apiBase = (import.meta).env?.VITE_API_BASE_URL || 'http://localhost:4000'
+  const handleAiWrite = async () => {
+    const basePrompt = data?.text?.trim() || 'Write a friendly chatbot message.'
+    setIsWriting(true)
+    try {
+      const res = await fetch(`${apiBase}/api/ai/write-text`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: basePrompt, style: 'support', length: 'medium' }),
+      })
+      if (!res.ok) return
+      const body = await res.json()
+      if (body && typeof body.text === 'string') onChange({ text: body.text })
+    } catch {
+      console.log("Error in AI write");
+    } finally {
+      setIsWriting(false)
+    }
+  }
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => onChange({ text: e.target.value })
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       <div className="form-label">Text</div>
       <textarea value={data?.text ?? ''} onChange={handleChange} rows={6} className="textarea" />
+      <button className="btn" type="button" onClick={handleAiWrite} disabled={isWriting}>
+        {isWriting ? 'Writing…' : 'Let AI write this'}
+      </button>
     </div>
   )
 }
@@ -91,10 +113,35 @@ function ImageSettings({
   data?: ImageNodeData
   onChange: (d: ImageNodeData) => void
 }) {
+  const [isGenerating, setIsGenerating] = useState(false)
+  const apiBase = (import.meta).env?.VITE_API_BASE_URL || 'http://localhost:4000'
   const onUrl = (e: ChangeEvent<HTMLInputElement>) =>
     onChange({ imageUrl: e.target.value, caption: data?.caption })
   const onCaption = (e: ChangeEvent<HTMLInputElement>) =>
     onChange({ imageUrl: data?.imageUrl || '', caption: e.target.value })
+  const handleGenerate = async () => {
+    const basePrompt =
+      (data?.caption && data.caption.trim()) ||
+      (data?.imageUrl && `Generate an image similar to: ${data.imageUrl}`) ||
+      'Generate an image suitable for this chatbot message.'
+    setIsGenerating(true)
+    try {
+      const res = await fetch(`${apiBase}/api/ai/generate-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: basePrompt, size: '1024x1024' }),
+      })
+      if (!res.ok) return
+      const body = await res.json()
+      if (body && typeof body.imageUrl === 'string') {
+        onChange({ imageUrl: body.imageUrl, caption: data?.caption })
+      }
+    } catch {
+      console.log("Error in AI image generation");
+    } finally {
+      setIsGenerating(false)
+    }
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div>
@@ -115,6 +162,9 @@ function ImageSettings({
           className="input"
         />
       </div>
+      <button className="btn" type="button" onClick={handleGenerate} disabled={isGenerating}>
+        {isGenerating ? 'Generating…' : 'Generate image with AI'}
+      </button>
     </div>
   )
 }
@@ -126,6 +176,9 @@ function ButtonSettings({
   data?: ButtonNodeData
   onChange: (d: ButtonNodeData) => void
 }) {
+  // console.log(data)
+  const [isWriting, setIsWriting] = useState(false)
+  const apiBase = (import.meta).env?.VITE_API_BASE_URL || 'http://localhost:3000'
   const buttons = data?.buttons ?? []
   const setText = (e: ChangeEvent<HTMLInputElement>) => onChange({ text: e.target.value, buttons })
   const setBtn = (idx: number, key: 'label' | 'value') => (e: ChangeEvent<HTMLInputElement>) => {
@@ -139,6 +192,24 @@ function ButtonSettings({
     })
   const removeBtn = (idx: number) =>
     onChange({ text: data?.text || '', buttons: buttons.filter((_, i) => i !== idx) })
+  const handleAiWrite = async () => {
+    const basePrompt = data?.text?.trim() || 'Write a question for quick reply buttons.'
+    setIsWriting(true)
+    try {
+      const res = await fetch(`${apiBase}/api/ai/write-text`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: basePrompt, style: 'support', length: 'short' }),
+      })
+      if (!res.ok) return
+      const body = await res.json()
+      if (body && typeof body.text === 'string') onChange({ text: body.text, buttons })
+    } catch {
+      console.log("Error in AI write for button text");
+    } finally {
+      setIsWriting(false)
+    }
+  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       <div>
@@ -149,6 +220,11 @@ function ButtonSettings({
           placeholder="Ask a question"
           className="input"
         />
+        <div style={{ marginTop: '8px' }}>
+          <button className="btn" type="button" onClick={handleAiWrite} disabled={isWriting}>
+            {isWriting ? 'Writing…' : 'Let AI write this'}
+          </button>
+        </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         <div className="section-title">Buttons</div>
@@ -202,7 +278,7 @@ function ConditionalSettings({
         />
       </div>
       <div>
-        <div className="form-label">Condition</div>
+             <div className="form-label">Condition</div>
         <input
           value={data?.condition ?? ''}
           onChange={onCond}
