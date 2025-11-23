@@ -1,5 +1,5 @@
 # Note
-I am using the paid version of OpenAI, which is why I chose these specific models (`gpt-4o-mini` and `gpt-image-1`).
+I am using the paid version of OpenAI, which is why I chose these specific models (`gpt-5.1` and `claude-3`).
 
 # Refold-AI2 – Chatbot Flow Builder
 
