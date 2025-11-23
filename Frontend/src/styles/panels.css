@@ -156,9 +156,26 @@
   justify-content: flex-end;
 }
 @media (max-width: 768px) {
-  .save-area { gap: 12px; }
+  .save-area {
+    gap: 8px;
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .fb-header .btn,
+  .fb-header .btn-primary {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
 }
 @media (max-width: 480px) {
-  .save-area { gap: 10px; }
-  .btn-primary { padding: 8px 14px; font-size: 13px; }
+  .save-area {
+    gap: 6px;
+  }
+  .fb-header .btn,
+  .fb-header .btn-primary {
+    padding: 5px 8px;
+    font-size: 12px;
+  }
 }
