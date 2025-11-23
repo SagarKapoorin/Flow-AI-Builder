@@ -3,6 +3,7 @@
 
 # Note
 I am using the paid version of OpenAI, which is why I chose these specific models (`gpt-5.1` and `claude-3`).
+Moreover i added comments in both frontend and backend code for easy understanding.
 
 # Refold-AI2 – Chatbot Flow Builder
 
