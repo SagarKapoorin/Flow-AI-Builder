@@ -1,0 +1,113 @@
+.fb-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  background: #f5f5f5;
+  overflow: hidden;
+  --header-h: 64px;
+  --sidebar-gap: 12px;
+}
+.fb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: #fff;
+  border-bottom: 1px solid #e5e5e5;
+  min-height: 64px;
+  z-index: 300;
+}
+.menu-button {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+  background: #fff;
+  font-size: 20px;
+  cursor: pointer;
+}
+.menu-button:hover { background: #f7f7f7; }
+.fb-toast-wrap {
+  position: fixed;
+  top: 76px; 
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+}
+.fb-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+.fb-canvas {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+.fb-sidebar {
+  flex: 0 1 360px;
+  min-width: 260px;
+  max-width: 100%;
+  background: #fff;
+  border-left: 1px solid #e5e5e5;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.05);
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+.fb-content { overflow-x: hidden; }
+.fb-overlay { display: none; }
+
+@media (max-width: 1024px) {
+  .fb-sidebar { flex-basis: 300px; }
+}
+@media (max-width: 768px) {
+  .menu-button { display: inline-flex; }
+  .fb-content { position: relative; }
+  .fb-sidebar {
+    position: fixed;
+    right: 0;
+    top: calc(var(--header-h) + var(--sidebar-gap))-8px;
+    height: calc(100vh - (var(--header-h) + var(--sidebar-gap)));
+    width: 320px;
+    max-width: 90vw;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    z-index: 320;
+    flex: 0 0 auto;
+    min-width: 0;
+    border-left: 1px solid #e5e5e5;
+    box-shadow: -8px 0 16px rgba(0, 0, 0, 0.15);
+  }
+  .fb-sidebar.is-open { transform: translateX(0); }
+  .fb-overlay {
+    display: block;
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: calc(var(--header-h) + var(--sidebar-gap))-8px;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 310;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .fb-overlay.show { opacity: 1; }
+}
+@media (max-width: 560px) {
+  .fb-sidebar { flex-basis: 240px; }
+}
+.sidebar-actions {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
