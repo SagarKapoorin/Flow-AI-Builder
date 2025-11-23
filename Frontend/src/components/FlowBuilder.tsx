@@ -83,6 +83,9 @@ export default function FlowBuilder() {
   const [aiDialogOpen, setAiDialogOpen] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiRecommendations, setAiRecommendations] = useState<string[]>([])
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false)
+  const [generateLoading, setGenerateLoading] = useState(false)
+  const [generateBrief, setGenerateBrief] = useState('')
   //Closex sidebar when nodes panel starts a drag on small screens
   //(NodesPanel dispatches a custom event during dragstart)
   useEffect(() => {
@@ -91,6 +94,15 @@ export default function FlowBuilder() {
     }
     window.addEventListener('fb-close-sidebar', handler as EventListener)
     return () => window.removeEventListener('fb-close-sidebar', handler as EventListener)
+  }, [])
+  useEffect(() => {
+    const openHandler = () => {
+      setGenerateBrief('')
+      setGenerateDialogOpen(true)
+    }
+    window.addEventListener('fb-open-generate-from-brief', openHandler as EventListener)
+    return () =>
+      window.removeEventListener('fb-open-generate-from-brief', openHandler as EventListener)
   }, [])
   //Mobile: click-to-add from NodesPanel
   useEffect(() => {
@@ -435,6 +447,51 @@ export default function FlowBuilder() {
     }
   }, [apiBase, nodes, edges, flowDescription, flowName, notify])
 
+  const handleGenerateFlowFromBrief = useCallback(async () => {
+    if (!generateBrief.trim()) {
+      notify('Please enter a brief for AI', 'error')
+      return
+    }
+    setGenerateLoading(true)
+    try {
+      const res = await fetch(`${apiBase}/api/ai/generate-flow-from-brief`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          brief: generateBrief.trim(),
+        }),
+      })
+      if (!res.ok) {
+        notify('Failed to generate flow from brief', 'error')
+        return
+      }
+      const data = await res.json()
+      if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
+        notify('AI did not return a valid flow', 'error')
+        return
+      }
+      setNodes(data.nodes)
+      setEdges(data.edges)
+      let max = 0
+      for (const n of data.nodes as AppRFNode[]) {
+        const m = /node_(\d+)$/.exec(n.id)
+        if (m) {
+          const num = Number(m[1])
+          if (!Number.isNaN(num) && num > max) max = num
+        }
+      }
+      idCounter = Math.max(1, max + 1)
+      setSelectedNodeId(undefined)
+      setFlowId(undefined)
+      setGenerateDialogOpen(false)
+      notify('Flow generated from brief', 'success')
+    } catch {
+      notify('Failed to generate flow from brief', 'error')
+    } finally {
+      setGenerateLoading(false)
+    }
+  }, [apiBase, generateBrief, notify, setNodes, setEdges])
+
   // initial flow is always in-memory; backend flows are opened via the "All flows" dialog
   return (
     <div className="fb-container">
@@ -463,6 +520,8 @@ export default function FlowBuilder() {
             flow={flow}
             name={flowName}
             description={flowDescription}
+            flowId={flowId}
+            onFlowIdChange={setFlowId}
             onSave={() => notify('Changes saved', 'success')}
             onError={(errs) => notify(errs?.[0] || 'Unable to save changes', 'error')}
           />
@@ -639,6 +698,69 @@ export default function FlowBuilder() {
               <button type="button" className="btn" onClick={() => setAiDialogOpen(false)}>
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {generateDialogOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 20,
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              padding: '16px',
+              borderRadius: '8px',
+              maxWidth: '520px',
+              width: '90%',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+            }}
+          >
+            <h2 style={{ margin: '0 0 12px 0' }}>AI generate flow from brief</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <div className="form-label">Brief</div>
+                <textarea
+                  className="textarea"
+                  rows={4}
+                  value={generateBrief}
+                  onChange={(e) => setGenerateBrief(e.target.value)}
+                  placeholder="Describe the chatbot flow you want (purpose, audience, tone, etc.)"
+                />
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: '8px',
+                  marginTop: '4px',
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setGenerateDialogOpen(false)}
+                  disabled={generateLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleGenerateFlowFromBrief}
+                  disabled={generateLoading}
+                >
+                  {generateLoading ? 'Generating' : 'Generate flow'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

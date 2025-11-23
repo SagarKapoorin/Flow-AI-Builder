@@ -76,55 +76,92 @@ export async function generateFlowFromBrief(
 ): Promise<GenerateFlowFromBriefResponse> {
   const { brief, preferences } = payload
 
-  const systemPrompt =
+  const baseSystemPrompt =
     'You are a senior chatbot flow architect. ' +
-    'Generate a directed acyclic chatbot flow graph as JSON with exactly one entry node. ' +
+    'Your primary goal is to generate a flow graph that STRICTLY passes the following validator rules: ' +
+    '(1) The graph must be a directed acyclic graph (DAG): absolutely no cycles. ' +
+    '(2) No self-loops are allowed (an edge where source === target). ' +
+    '(3) No bidirectional pairs are allowed: if there is an edge A->B then there must NOT be an edge B->A. ' +
+    '(4) If there is more than one node, there must be EXACTLY ONE entry node (a node with indegree 0). ' +
+    '(5) Allowed node types are ONLY: "text", "image", "button", "conditional". ' +
+    '(6) For "text" and "image" nodes: they may have at most ONE outgoing edge, and their outgoing edges MUST NOT use a named sourceHandle (sourceHandle must be null/omitted). ' +
+    '(7) For "button" nodes: data = { text: string, buttons: { label: string, value: string }[] }. Every outgoing edge MUST have sourceHandle equal to one of the button "value" strings. You may have multiple outgoing edges from a button node, but each must use a valid button value. Do not create edges with missing or unknown sourceHandle values. ' +
+    '(8) For "conditional" nodes: every outgoing edge MUST have sourceHandle equal to "true" or "false" ONLY. ' +
+    '(9) All node ids must be unique strings. ' +
+    '(10) All edge ids must be unique strings, and every edge.source and edge.target must refer to an existing node id. ' +
     'Use node types: "text", "image", "button", "conditional". ' +
-    'Data schema: ' +
+    'Node data schema: ' +
     'text: { text: string }, ' +
     'image: { imageUrl: string, caption?: string }, ' +
     'button: { text: string, buttons: { label: string, value: string }[] }, ' +
     'conditional: { variable: string, condition: string }. ' +
-    'Edges: { id: string, source: string, target: string, sourceHandle?: string | null, targetHandle?: string | null, type?: string }. ' +
-    'For button nodes, sourceHandle must equal one of the button "value" strings. ' +
-    'For conditional nodes, use sourceHandle "true" or "false" only. ' +
-    'Ensure: no cycles, no self loops, no bidirectional pairs, and exactly one node with zero indegree if there is more than one node. ' +
-    'Respond ONLY with a JSON object { "nodes": [...], "edges": [...] }.'
+    'Edges schema: { id: string, source: string, target: string, sourceHandle?: string | null, targetHandle?: string | null, type?: string }. ' +
+    'Before you respond, mentally CHECK EACH RULE (1)-(10) above and fix any violations (such as cycles, bidirectional edges, invalid handles, multiple entry nodes) so that the final graph will pass validation. ' +
+    'Respond ONLY with a JSON object of the form { "nodes": [...], "edges": [...] } and no other text.'
 
   const preferenceDesc =
     preferences && Object.keys(preferences).length
       ? `Preferences: ${JSON.stringify(preferences)}`
       : 'Preferences: none specified'
 
-  const completion = await openai.chat.completions.create({
-    model: config.openaiModel,
-    response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: systemPrompt },
+  let lastErrors: string[] = []
+  let lastGraph: FlowGraph | null = null
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const messages: Array<{ role: 'system' | 'user'; content: string }> = [
+      { role: 'system', content: baseSystemPrompt },
       { role: 'user', content: `Brief: ${brief}\n${preferenceDesc}` },
-    ],
-    temperature: 0.4,
-  })
+    ]
 
-  const content = completion.choices[0]?.message?.content || '{}'
-  // console.log("AI Flow Generation Completion:", content);
-  let parsed: GenerateFlowFromBriefResponse
-  try {
-    parsed = JSON.parse(content) as GenerateFlowFromBriefResponse
-  } catch {
-    throw new Error('Failed to parse OpenAI flow generation response as JSON')
+    if (attempt > 1 && lastGraph) {
+      messages.push({
+        role: 'user',
+        content: [
+          'The previous flow graph you produced did not pass validation.',
+          'Here is the invalid JSON graph:',
+          JSON.stringify(lastGraph, null, 2),
+          '',
+          'Validator errors:',
+          ...lastErrors.map((e) => `- ${e}`),
+          '',
+          'Please output a CORRECTED graph that fixes ALL of these issues while keeping the overall conversational intent similar.',
+          'Remember to re-check ALL rules (1)-(10) before responding.',
+        ].join('\n'),
+      })
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: config.openaiModel,
+      response_format: { type: 'json_object' },
+      messages,
+      temperature: attempt === 1 ? 0.4 : 0.2,
+    })
+
+    const content = completion.choices[0]?.message?.content || '{}'
+    let parsed: GenerateFlowFromBriefResponse
+    try {
+      parsed = JSON.parse(content) as GenerateFlowFromBriefResponse
+    } catch {
+      lastErrors = ['Failed to parse OpenAI flow generation response as JSON']
+      lastGraph = null
+      continue
+    }
+
+    const validation = validateFlowGraph(parsed as unknown as FlowGraph)
+    if (validation.valid) {
+      return parsed
+    }
+
+    lastErrors = validation.errors
+    lastGraph = parsed as unknown as FlowGraph
   }
 
-  const validation = validateFlowGraph(parsed)
-  if (!validation.valid) {
-    const error: any = new Error(
-      'Model produced an invalid flow graph: ' + validation.errors.join('; ')
-    )
-    error.name = 'AIFlowGenerationError'
-    error.validationErrors = validation.errors
-    throw error
-  }
-  return parsed
+  const error: any = new Error(
+    'Model produced an invalid flow graph after retries: ' + lastErrors.join('; ')
+  )
+  error.name = 'AIFlowGenerationError'
+  error.validationErrors = lastErrors
+  throw error
 }
 
 //this funciton generat image with ai

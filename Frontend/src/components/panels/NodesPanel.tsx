@@ -69,6 +69,19 @@ export default function NodesPanel() {
           </div>
         ))}
       </div>
+      <div style={{ marginTop: '16px' }}>
+        <button
+          type="button"
+          className="btn"
+          style={{ width: '100%' }}
+          onClick={() => {
+            const evt = new Event('fb-open-generate-from-brief')
+            window.dispatchEvent(evt)
+          }}
+        >
+          AI generate full flow
+        </button>
+      </div>
     </div>
   )
 }
