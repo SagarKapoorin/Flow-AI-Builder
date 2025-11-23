@@ -12,6 +12,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: nowrap;
   padding: 16px 24px;
   background: #fff;
   border-bottom: 1px solid #e5e5e5;
@@ -70,6 +71,11 @@
   .fb-sidebar { flex-basis: 300px; }
 }
 @media (max-width: 768px) {
+  .fb-header {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    row-gap: 8px;
+  }
   .menu-button { display: inline-flex; }
   .fb-content { position: relative; }
   .fb-sidebar {

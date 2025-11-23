@@ -1,10 +1,12 @@
 import { Handle, Position, type NodeProps, useReactFlow } from '@xyflow/react'
 import type { ButtonRFNode } from '../../types/flow.types'
 export default function ButtonNode({ data, selected, id }: NodeProps<ButtonRFNode>) {
-   const { setNodes, setEdges } = useReactFlow()
+   const { setNodes, setEdges } = useReactFlow();
+  //  console.log("ButtonNode Rendered:", id);
   const handleDelete = () => {
     setNodes((nds) => nds.filter((n) => n.id !== id))
     setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id))
+    // console.log("ButtonNode Deleted:", id);
   }
   const buttons = data?.buttons ?? []
   return (

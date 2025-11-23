@@ -3,9 +3,11 @@ import type { ConditionalRFNode } from '../../types/flow.types'
 
 export default function ConditionalNode({ data, selected, id }: NodeProps<ConditionalRFNode>) {
   const { setNodes, setEdges } = useReactFlow()
+  // console.log(setNodes);
   const handleDelete = () => {
     setNodes((nds) => nds.filter((n) => n.id !== id))
     setEdges((eds) => eds.filter((e) => e.source !== id && e.target !== id))
+    // console.log("ConditionalNode Deleted:", id);
   }
   return (
     <div className={`node ${selected ? 'node-selected' : ''}`}>
