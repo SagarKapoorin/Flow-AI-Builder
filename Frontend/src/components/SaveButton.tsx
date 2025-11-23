@@ -5,14 +5,20 @@ type Props = {
   flow: Flow
   name?: string
   description?: string
+  flowId?: string
+  onFlowIdChange?: (id: string | undefined) => void
   onSave?: (flow: Flow) => void
   onError?: (errors: string[]) => void
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'
 
-async function persistFlowToBackend(flow: Flow, name?: string, description?: string): Promise<void> {
-  const existingId = localStorage.getItem('bitspeed.flowId')
+async function persistFlowToBackend(
+  flow: Flow,
+  name?: string,
+  description?: string,
+  existingId?: string
+): Promise<string | undefined> {
   const payload = {
     name: name || 'Main Chatbot Flow',
     description: description ?? 'Saved from BiteSpeed Flow Builder',
@@ -43,14 +49,23 @@ async function persistFlowToBackend(flow: Flow, name?: string, description?: str
   try {
     const saved = await res.json()
     if (saved && typeof saved.id === 'string') {
-      localStorage.setItem('bitspeed.flowId', saved.id)
+      return saved.id
     }
   } catch {
     // ignore if no json body / parse error
   }
+  return existingId
 }
 
-export default function SaveButton({ flow, name, description, onSave, onError }: Props) {
+export default function SaveButton({
+  flow,
+  name,
+  description,
+  flowId,
+  onFlowIdChange,
+  onSave,
+  onError,
+}: Props) {
   const handleClick = async () => {
     const result = validateFlow(flow)
     if (!result.valid) {
@@ -58,15 +73,8 @@ export default function SaveButton({ flow, name, description, onSave, onError }:
       return
     }
     try {
-      const json = JSON.stringify(flow)
-      localStorage.setItem('bitspeed.flow', json)
-    } catch {
-      const errs = ['failed to save to localstorage']
-      if (onError) onError(errs)
-      return
-    }
-    try {
-      await persistFlowToBackend(flow, name, description)
+      const newId = await persistFlowToBackend(flow, name, description, flowId)
+      if (newId && onFlowIdChange) onFlowIdChange(newId)
       if (onSave) onSave(flow)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to save to backend'

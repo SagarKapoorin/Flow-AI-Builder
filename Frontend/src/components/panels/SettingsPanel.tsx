@@ -152,13 +152,6 @@ function ImageSettings({
           placeholder="https://..."
           className="input"
         />
-        {data?.imageUrl && (
-          <div style={{ marginTop: '4px' }}>
-            <a href={data.imageUrl} target="_blank" rel="noreferrer">
-              Open image
-            </a>
-          </div>
-        )}
       </div>
       <div>
         <div className="form-label">Caption</div>
