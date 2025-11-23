@@ -1,3 +1,6 @@
+# Working video
+[Watch Demo Video](https://bit.ly/49BYVsS)
+
 # Note
 I am using the paid version of OpenAI, which is why I chose these specific models (`gpt-5.1` and `claude-3`).
 
