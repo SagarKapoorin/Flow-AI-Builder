@@ -154,13 +154,16 @@ const nodeTypes: NodeTypes = {
 //added registry pattern to easily register new nodes
 
 export default function FlowBuilder() {
-const initial = useMemo(() => loadInitialFlow(), []);
+  const initial = useMemo(() => loadInitialFlow(), [])
   const [nodes, setNodes, onNodesChange] = useNodesState<AppRFNode>(initial.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState<RFEdge>(initial.edges)
   const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>()
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const rf = useRef<ReactFlowInstance<AppRFNode, RFEdge> | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [flowName, setFlowName] = useState<string>('Main Chatbot Flow')
+  const [flowDescription, setFlowDescription] = useState<string>('')
+  const [metaDialogOpen, setMetaDialogOpen] = useState(false)
   //Closex sidebar when nodes panel starts a drag on small screens
   //(NodesPanel dispatches a custom event during dragstart)
   useEffect(() => {
@@ -359,10 +362,45 @@ const initial = useMemo(() => loadInitialFlow(), []);
   const notify = useCallback((message: string, type: 'success' | 'error') => {
     setToast({ type, message })
     if (toastTimerRef.current) {
+      // console.log("Clearing existing toast timer");
       window.clearTimeout(toastTimerRef.current)
     }
     toastTimerRef.current = window.setTimeout(() => setToast(null), 3000) as unknown as number
   }, [])
+
+  useEffect(() => {
+    const apiBase = (import.meta).env?.VITE_API_BASE_URL || 'http://localhost:4000'
+    const flowId = localStorage.getItem('bitspeed.flowId')
+    if (!flowId) return
+    const controller = new AbortController()
+    const load = async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/flows/${encodeURIComponent(flowId)}`, {
+          signal: controller.signal,
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges)) return
+        setNodes(data.nodes)
+        setEdges(data.edges)
+        if (typeof data.name === 'string') setFlowName(data.name)
+        if (typeof data.description === 'string') setFlowDescription(data.description)
+        let max = 0
+        for (const n of data.nodes as AppRFNode[]) {
+          const m = /node_(\d+)$/.exec(n.id)
+          if (m) {
+            const num = Number(m[1])
+            if (!Number.isNaN(num) && num > max) max = num
+          }
+        }
+        idCounter = Math.max(1, max + 1)
+      } catch {
+        // ignore load errors, user still has local data
+      }
+    }
+    void load()
+    return () => controller.abort()
+  }, [setNodes, setEdges])
   return (
     <div className="fb-container">
       <div className="fb-header">
@@ -377,9 +415,19 @@ const initial = useMemo(() => loadInitialFlow(), []);
         <div className="save-area">
           <SaveButton
             flow={flow}
+            name={flowName}
+            description={flowDescription}
             onSave={() => notify('Changes saved', 'success')}
             onError={(errs) => notify(errs?.[0] || 'Unable to save changes', 'error')}
           />
+          <button
+            type="button"
+            className="btn"
+            style={{ marginLeft: '8px' }}
+            onClick={() => setMetaDialogOpen(true)}
+          >
+            Edit details
+          </button>
         </div>
       </div>
       {toast && (
@@ -430,6 +478,72 @@ const initial = useMemo(() => loadInitialFlow(), []);
         className={`fb-overlay ${sidebarOpen ? 'show' : ''}`}
         onClick={() => setSidebarOpen(false)}
       />
+      {metaDialogOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 20,
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              padding: '16px',
+              borderRadius: '8px',
+              maxWidth: '420px',
+              width: '90%',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+            }}
+          >
+            <h2 style={{ margin: '0 0 12px 0' }}>Flow details</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <div className="form-label">Name</div>
+                <input
+                  className="input"
+                  value={flowName}
+                  onChange={(e) => setFlowName(e.target.value)}
+                  placeholder="My chatbot flow"
+                />
+              </div>
+              <div>
+                <div className="form-label">Description</div>
+                <textarea
+                  className="textarea"
+                  rows={3}
+                  value={flowDescription}
+                  onChange={(e) => setFlowDescription(e.target.value)}
+                  placeholder="Optional description for this flow"
+                />
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: '8px',
+                  marginTop: '4px',
+                }}
+              >
+                <button type="button" className="btn" onClick={() => setMetaDialogOpen(false)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setMetaDialogOpen(false)}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
