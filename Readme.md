@@ -56,3 +56,18 @@ Our app uses OpenAI’s `gpt-4o-mini` for text and structured graph generation, 
 AI powers four main features: (1) improving existing chatbot flows with JSON-formatted recommendations, (2) generating entire flow graphs from a brief with a validation/retry loop, (3) writing chatbot copy for messages and quick replies, and (4) creating illustrative images for image nodes.  
 The architecture is a React + TypeScript + Vite frontend using `@xyflow/react` for visual flow editing, talking to a Node.js + Express + TypeScript backend. The backend stores flows in MongoDB, validates graph structure, and exposes REST endpoints that wrap the OpenAI SDK. Frontend and backend share flow types and validation rules so AI-generated graphs are always checked before being saved or rendered.
 
+
+## Automated Maintenance Log
+
+<!-- automated-maintenance-log:start -->
+### README Upkeep
+
+This automated documentation pass ran at 2026-05-05 13:49:31 IST and refreshed the project maintenance notes.
+
+- Current branch: `main`
+- Repository head: `362632b`
+- Top-level items checked: Backend, Frontend, Readme.md
+- Maintenance note: Automated.
+
+<!-- run:5cc2ae4cd3 -->
+<!-- automated-maintenance-log:end -->
