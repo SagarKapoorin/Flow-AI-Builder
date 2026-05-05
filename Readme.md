@@ -62,12 +62,12 @@ The architecture is a React + TypeScript + Vite frontend using `@xyflow/react` f
 <!-- automated-maintenance-log:start -->
 ### README Upkeep
 
-This automated documentation pass ran at 2026-05-05 13:49:31 IST and refreshed the project maintenance notes.
+This automated documentation pass ran at 2026-05-05 13:50:11 IST and refreshed the project maintenance notes.
 
 - Current branch: `main`
-- Repository head: `362632b`
+- Repository head: `7a63e91`
 - Top-level items checked: Backend, Frontend, Readme.md
 - Maintenance note: Automated.
 
-<!-- run:5cc2ae4cd3 -->
+<!-- run:f406191b5c -->
 <!-- automated-maintenance-log:end -->
